@@ -1,0 +1,240 @@
+package javaprg;
+
+import java.util.*;
+
+public class LeagueAppMain {
+
+    
+    static abstract class Player {
+        protected int playerId;
+        protected String name;
+        protected String role;
+        protected double rating;
+        protected int stats;
+
+        public Player(int playerId, String name, String role, double rating, int stats) {
+            this.playerId = playerId;
+            this.name = name;
+            this.role = role;
+            this.rating = rating;
+            this.stats = stats;
+        }
+
+        public abstract void updateRating(); 
+
+        public int getStats() { return stats; }
+        public String getName() { return name; }
+        public double getRating() { return rating; }
+    }
+
+    
+    static class Striker extends Player {
+        private int goals;
+
+        public Striker(int playerId, String name, double rating, int goals) {
+            super(playerId, name, "Striker", rating, goals);
+            this.goals = goals;
+        }
+
+        @Override
+        public void updateRating() {
+            rating += goals * 0.1;
+        }
+    }
+
+    
+    static class Goalkeeper extends Player {
+        private int saves;
+
+        public Goalkeeper(int playerId, String name, double rating, int saves) {
+            super(playerId, name, "Goalkeeper", rating, saves);
+            this.saves = saves;
+        }
+
+        @Override
+        public void updateRating() {
+            rating += saves * 0.05;
+        }
+    }
+
+    
+    static class Team {
+        private int teamId;
+        private String name;
+        private String coach;
+        private String city;
+        private int points = 0;
+        private List<Player> players = new ArrayList<>();
+
+        public Team(int teamId, String name, String coach, String city) {
+            this.teamId = teamId;
+            this.name = name;
+            this.coach = coach;
+            this.city = city;
+        }
+
+        public void addPlayer(Player player) {
+            players.add(player);
+        }
+
+        public List<Player> getPlayers() { return players; }
+        public int getPoints() { return points; }
+        public void addPoints(int p) { this.points += p; }
+        public String getName() { return name; }
+    }
+
+
+    static class Match {
+        private int matchId;
+        private Team homeTeam;
+        private Team awayTeam;
+        private String date;
+        private String scorecard = "TBD";
+        private String result = "Pending";
+
+        public Match(int matchId, Team home, Team away, String date) {
+            this.matchId = matchId;
+            this.homeTeam = home;
+            this.awayTeam = away;
+            this.date = date;
+        }
+
+        public void recordResult(int homeGoals, int awayGoals) {
+            this.scorecard = homeGoals + " - " + awayGoals;
+            if (homeGoals > awayGoals) {
+                result = homeTeam.getName() + " wins";
+                homeTeam.addPoints(3);
+            } else if (awayGoals > homeGoals) {
+                result = awayTeam.getName() + " wins";
+                awayTeam.addPoints(3);
+            } else {
+                result = "Draw";
+                homeTeam.addPoints(1);
+                awayTeam.addPoints(1);
+            }
+        }
+
+
+        public void recordResult(Map<Player, Integer> playerStats) {
+            for (Player p : playerStats.keySet()) {
+                p.stats += playerStats.get(p);
+                p.updateRating(); 
+            }
+        }
+
+        public String getSummary() {
+            return "Match " + matchId + ": " + homeTeam.getName() + " vs " + awayTeam.getName() +
+                    " on " + date + " | Result: " + result + " | Score: " + scorecard;
+        }
+
+        public String getDate() {
+            return date;
+        }
+
+        public boolean isPlayed() {
+            return !result.equals("Pending");
+        }
+    }
+
+    
+    static class LeagueService {
+        private List<Team> teams = new ArrayList<>();
+        private List<Match> matches = new ArrayList<>();
+        private int teamIdCounter = 1;
+        private int matchIdCounter = 1;
+
+        public void registerTeam(String name, String coach, String city) {
+            Team team = new Team(teamIdCounter++, name, coach, city);
+            teams.add(team);
+        }
+
+        public void addPlayerToTeam(int teamIndex, Player player) {
+            teams.get(teamIndex).addPlayer(player);
+        }
+
+        public void scheduleMatches() {
+            for (int i = 0; i < teams.size(); i++) {
+                for (int j = i + 1; j < teams.size(); j++) {
+                    matches.add(new Match(matchIdCounter++, teams.get(i), teams.get(j), "2025-09-" + (10 + matchIdCounter)));
+                }
+            }
+        }
+
+        public void recordResult(int matchId, int homeGoals, int awayGoals) {
+            Match match = matches.get(matchId - 1); 
+            match.recordResult(homeGoals, awayGoals);
+        }
+
+        public void showStandings() {
+            teams.sort((a, b) -> b.getPoints() - a.getPoints());
+            System.out.println("\n--- League Table ---");
+            for (Team t : teams) {
+                System.out.println(t.getName() + " | Points: " + t.getPoints());
+            }
+        }
+
+        public void showUpcomingMatches() {
+            System.out.println("\n--- Upcoming Matches ---");
+            for (Match m : matches) {
+                if (!m.isPlayed()) {
+                    System.out.println(m.getSummary());
+                }
+            }
+        }
+
+        public void showAllResults() {
+            System.out.println("\n--- Match Results ---");
+            for (Match m : matches) {
+                if (m.isPlayed()) {
+                    System.out.println(m.getSummary());
+                }
+            }
+        }
+
+        public void showAwards() {
+            List<Player> allPlayers = new ArrayList<>();
+            for (Team t : teams) {
+                allPlayers.addAll(t.getPlayers());
+            }
+
+            allPlayers.sort((a, b) -> b.getStats() - a.getStats());
+            Player mvp = allPlayers.get(0);
+            System.out.println("\n--- Awards ---");
+            System.out.println("MVP: " + mvp.getName() + " | Stats: " + mvp.getStats() + " | Rating: " + mvp.getRating());
+        }
+    }
+
+
+    public static void main(String[] args) {
+        LeagueService league = new LeagueService();
+
+
+        league.registerTeam("Falcons", "Coach A", "New York");
+        league.registerTeam("Tigers", "Coach B", "Chicago");
+        league.registerTeam("Wolves", "Coach C", "LA");
+
+
+        league.addPlayerToTeam(0, new Striker(1, "John", 4.5, 5));
+        league.addPlayerToTeam(0, new Goalkeeper(2, "Sam", 3.8, 10));
+
+        league.addPlayerToTeam(1, new Striker(3, "Alex", 5.0, 7));
+        league.addPlayerToTeam(1, new Goalkeeper(4, "Tom", 4.2, 8));
+
+        league.addPlayerToTeam(2, new Striker(5, "Max", 4.9, 6));
+        league.addPlayerToTeam(2, new Goalkeeper(6, "Leo", 4.0, 12));
+
+
+        league.scheduleMatches();
+
+
+        league.recordResult(1, 2, 1); // Falcons beat Tigers
+        league.recordResult(2, 0, 0); // Draw between Falcons and Wolves
+        league.recordResult(3, 3, 2); // Tigers beat Wolves
+
+
+        league.showAllResults();
+        league.showStandings();
+        league.showAwards();
+        league.showUpcomingMatches();
+    }
+}
