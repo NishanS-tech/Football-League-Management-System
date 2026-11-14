@@ -1,18 +1,22 @@
 package javaprg;
-
 import java.util.*;
-
+import java.time.LocalDate;
 public class LeagueAppMain {
-
-    
     static abstract class Player {
+
         protected int playerId;
         protected String name;
         protected String role;
         protected double rating;
         protected int stats;
 
-        public Player(int playerId, String name, String role, double rating, int stats) {
+        public Player(int playerId, String name, String role,
+                      double rating, int stats) {
+
+            if (playerId <= 0 || rating < 0 || stats < 0) {
+                throw new IllegalArgumentException("Invalid player details.");
+            }
+
             this.playerId = playerId;
             this.name = name;
             this.role = role;
@@ -20,53 +24,103 @@ public class LeagueAppMain {
             this.stats = stats;
         }
 
-        public abstract void updateRating(); 
+        public abstract void updateRating(int performance);
 
-        public int getStats() { return stats; }
-        public String getName() { return name; }
-        public double getRating() { return rating; }
+        public final void addPerformance(int performance) {
+
+            if (performance < 0) {
+                throw new IllegalArgumentException(
+                        "Performance value cannot be negative."
+                );
+            }
+
+            stats += performance;
+            updateRating(performance);
+        }
+
+        public int getPlayerId() {
+            return playerId;
+        }
+
+        public int getStats() {
+            return stats;
+        }
+
+        public String getName() {
+            return name;
+        }
+
+        public String getRole() {
+            return role;
+        }
+
+        public double getRating() {
+            return rating;
+        }
     }
 
-    
     static class Striker extends Player {
+
         private int goals;
 
-        public Striker(int playerId, String name, double rating, int goals) {
+        public Striker(int playerId, String name,
+                       double rating, int goals) {
+
             super(playerId, name, "Striker", rating, goals);
+
             this.goals = goals;
         }
 
         @Override
-        public void updateRating() {
-            rating += goals * 0.1;
+        public void updateRating(int performance) {
+
+            goals += performance;
+            rating += performance * 0.1;
+        }
+
+        public int getGoals() {
+            return goals;
         }
     }
 
-    
     static class Goalkeeper extends Player {
+
         private int saves;
 
-        public Goalkeeper(int playerId, String name, double rating, int saves) {
+        public Goalkeeper(int playerId, String name,
+                          double rating, int saves) {
+
             super(playerId, name, "Goalkeeper", rating, saves);
+
             this.saves = saves;
         }
 
         @Override
-        public void updateRating() {
-            rating += saves * 0.05;
+        public void updateRating(int performance) {
+
+            saves += performance;
+            rating += performance * 0.05;
+        }
+
+        public int getSaves() {
+            return saves;
         }
     }
 
-    
     static class Team {
+
         private int teamId;
         private String name;
         private String coach;
         private String city;
+
         private int points = 0;
+
         private List<Player> players = new ArrayList<>();
 
-        public Team(int teamId, String name, String coach, String city) {
+        public Team(int teamId, String name,
+                    String coach, String city) {
+
             this.teamId = teamId;
             this.name = name;
             this.coach = coach;
@@ -74,25 +128,69 @@ public class LeagueAppMain {
         }
 
         public void addPlayer(Player player) {
+
+            for (Player existing : players) {
+
+                if (existing.getPlayerId() == player.getPlayerId()) {
+                    throw new IllegalArgumentException(
+                            "Player already exists in this team."
+                    );
+                }
+            }
+
             players.add(player);
         }
 
-        public List<Player> getPlayers() { return players; }
-        public int getPoints() { return points; }
-        public void addPoints(int p) { this.points += p; }
-        public String getName() { return name; }
+        public boolean hasPlayer(Player player) {
+            return players.contains(player);
+        }
+
+        public List<Player> getPlayers() {
+            return Collections.unmodifiableList(players);
+        }
+
+        public int getPoints() {
+            return points;
+        }
+
+        public void addPoints(int points) {
+            this.points += points;
+        }
+
+        public int getTeamId() {
+            return teamId;
+        }
+
+        public String getName() {
+            return name;
+        }
+
+        public String getCoach() {
+            return coach;
+        }
+
+        public String getCity() {
+            return city;
+        }
     }
 
-
     static class Match {
+
         private int matchId;
+
         private Team homeTeam;
         private Team awayTeam;
-        private String date;
+
+        private LocalDate date;
+
         private String scorecard = "TBD";
         private String result = "Pending";
 
-        public Match(int matchId, Team home, Team away, String date) {
+        private Set<Integer> recordedPlayerStats = new HashSet<>();
+
+        public Match(int matchId, Team home,
+                     Team away, LocalDate date) {
+
             this.matchId = matchId;
             this.homeTeam = home;
             this.awayTeam = away;
@@ -100,140 +198,473 @@ public class LeagueAppMain {
         }
 
         public void recordResult(int homeGoals, int awayGoals) {
-            this.scorecard = homeGoals + " - " + awayGoals;
+
+            if (isPlayed()) {
+                throw new IllegalStateException(
+                        "Match result has already been recorded."
+                );
+            }
+
+            if (homeGoals < 0 || awayGoals < 0) {
+                throw new IllegalArgumentException(
+                        "Goals cannot be negative."
+                );
+            }
+
+            scorecard = homeGoals + " - " + awayGoals;
+
             if (homeGoals > awayGoals) {
+
                 result = homeTeam.getName() + " wins";
+
                 homeTeam.addPoints(3);
+
             } else if (awayGoals > homeGoals) {
+
                 result = awayTeam.getName() + " wins";
+
                 awayTeam.addPoints(3);
+
             } else {
+
                 result = "Draw";
+
                 homeTeam.addPoints(1);
                 awayTeam.addPoints(1);
             }
         }
 
-
         public void recordResult(Map<Player, Integer> playerStats) {
-            for (Player p : playerStats.keySet()) {
-                p.stats += playerStats.get(p);
-                p.updateRating(); 
+
+            if (!isPlayed()) {
+                throw new IllegalStateException(
+                        "Record the match score before updating player statistics."
+                );
+            }
+
+            if (playerStats == null || playerStats.isEmpty()) {
+                throw new IllegalArgumentException(
+                        "Player statistics cannot be empty."
+                );
+            }
+            for (Map.Entry<Player, Integer> entry
+                    : playerStats.entrySet()) {
+
+                Player player = entry.getKey();
+                Integer performance = entry.getValue();
+
+                if (player == null || performance == null
+                        || performance < 0) {
+
+                    throw new IllegalArgumentException(
+                            "Invalid player performance data."
+                    );
+                }
+
+                boolean belongsToMatch =
+                        homeTeam.hasPlayer(player)
+                        || awayTeam.hasPlayer(player);
+
+                if (!belongsToMatch) {
+                    throw new IllegalArgumentException(
+                            "Player does not belong to either participating team."
+                    );
+                }
+
+                if (recordedPlayerStats.contains(player.getPlayerId())) {
+                    throw new IllegalArgumentException(
+                            "Player statistics already recorded for this match."
+                    );
+                }
+            }
+            for (Map.Entry<Player, Integer> entry
+                    : playerStats.entrySet()) {
+
+                Player player = entry.getKey();
+
+                int performance = entry.getValue();
+
+                player.addPerformance(performance);
+
+                recordedPlayerStats.add(player.getPlayerId());
             }
         }
 
         public String getSummary() {
-            return "Match " + matchId + ": " + homeTeam.getName() + " vs " + awayTeam.getName() +
-                    " on " + date + " | Result: " + result + " | Score: " + scorecard;
-        }
 
-        public String getDate() {
-            return date;
+            return "Match " + matchId + ": "
+                    + homeTeam.getName() + " vs "
+                    + awayTeam.getName()
+                    + " on " + date
+                    + " | Result: " + result
+                    + " | Score: " + scorecard;
         }
 
         public boolean isPlayed() {
             return !result.equals("Pending");
         }
+
+        public int getMatchId() {
+            return matchId;
+        }
+
+        public LocalDate getDate() {
+            return date;
+        }
     }
 
-    
     static class LeagueService {
+
         private List<Team> teams = new ArrayList<>();
         private List<Match> matches = new ArrayList<>();
+
         private int teamIdCounter = 1;
         private int matchIdCounter = 1;
+        public int registerTeam(String name, String coach, String city) {
 
-        public void registerTeam(String name, String coach, String city) {
-            Team team = new Team(teamIdCounter++, name, coach, city);
-            teams.add(team);
-        }
+            for (Team team : teams) {
 
-        public void addPlayerToTeam(int teamIndex, Player player) {
-            teams.get(teamIndex).addPlayer(player);
-        }
+                if (team.getName().equalsIgnoreCase(name)) {
 
-        public void scheduleMatches() {
-            for (int i = 0; i < teams.size(); i++) {
-                for (int j = i + 1; j < teams.size(); j++) {
-                    matches.add(new Match(matchIdCounter++, teams.get(i), teams.get(j), "2025-09-" + (10 + matchIdCounter)));
+                    throw new IllegalArgumentException(
+                            "Team already registered."
+                    );
                 }
             }
-        }
 
-        public void recordResult(int matchId, int homeGoals, int awayGoals) {
-            Match match = matches.get(matchId - 1); 
-            match.recordResult(homeGoals, awayGoals);
-        }
+            if (name == null || name.isBlank()
+                    || coach == null || coach.isBlank()
+                    || city == null || city.isBlank()) {
 
-        public void showStandings() {
-            teams.sort((a, b) -> b.getPoints() - a.getPoints());
-            System.out.println("\n--- League Table ---");
+                throw new IllegalArgumentException(
+                        "Team details cannot be empty."
+                );
+            }
+
+            Team team = new Team(
+                    teamIdCounter++, name, coach, city
+            );
+
+            teams.add(team);
+
+            return team.getTeamId();
+        }
+        public void addPlayerToTeam(int teamId, Player player) {
+
+            Team team = findTeam(teamId);
+
+            if (team == null) {
+                throw new IllegalArgumentException("Team not found.");
+            }
+
             for (Team t : teams) {
-                System.out.println(t.getName() + " | Points: " + t.getPoints());
+
+                for (Player existing : t.getPlayers()) {
+
+                    if (existing.getPlayerId() == player.getPlayerId()) {
+
+                        throw new IllegalArgumentException(
+                                "Player ID already exists in the league."
+                        );
+                    }
+                }
+            }
+
+            team.addPlayer(player);
+        }
+        private Team findTeam(int teamId) {
+
+            for (Team team : teams) {
+
+                if (team.getTeamId() == teamId) {
+                    return team;
+                }
+            }
+
+            return null;
+        }
+        public void scheduleMatches() {
+
+            if (teams.size() < 2) {
+
+                System.out.println(
+                        "At least two teams are required."
+                );
+
+                return;
+            }
+
+            if (!matches.isEmpty()) {
+
+                System.out.println(
+                        "Matches have already been scheduled."
+                );
+
+                return;
+            }
+
+            LocalDate startDate = LocalDate.now().plusDays(1);
+
+            for (int i = 0; i < teams.size(); i++) {
+
+                for (int j = i + 1; j < teams.size(); j++) {
+
+                    LocalDate matchDate =
+                            startDate.plusDays(matches.size());
+
+                    matches.add(
+                            new Match(
+                                    matchIdCounter++,
+                                    teams.get(i),
+                                    teams.get(j),
+                                    matchDate
+                            )
+                    );
+                }
+            }
+
+            System.out.println("Matches scheduled successfully.");
+        }
+        private Match findMatch(int matchId) {
+
+            for (Match match : matches) {
+
+                if (match.getMatchId() == matchId) {
+                    return match;
+                }
+            }
+
+            return null;
+        }
+        public void recordResult(
+                int matchId, int homeGoals, int awayGoals) {
+
+            Match match = findMatch(matchId);
+
+            if (match == null) {
+
+                System.out.println("Match not found.");
+                return;
+            }
+
+            match.recordResult(homeGoals, awayGoals);
+
+            System.out.println("Match result recorded successfully.");
+        }
+        public void recordPlayerStats(
+                int matchId, Map<Player, Integer> playerStats) {
+
+            Match match = findMatch(matchId);
+
+            if (match == null) {
+
+                System.out.println("Match not found.");
+                return;
+            }
+
+            match.recordResult(playerStats);
+
+            System.out.println(
+                    "Player statistics updated successfully."
+            );
+        }
+        public void showStandings() {
+
+            if (teams.isEmpty()) {
+
+                System.out.println("No teams registered.");
+                return;
+            }
+
+            teams.sort(
+                    Comparator.comparingInt(Team::getPoints)
+                            .reversed()
+                            .thenComparing(Team::getName)
+            );
+
+            System.out.println("\n--- League Table ---");
+
+            System.out.printf(
+                    "%-20s %-10s%n",
+                    "Team", "Points"
+            );
+
+            for (Team team : teams) {
+
+                System.out.printf(
+                        "%-20s %-10d%n",
+                        team.getName(),
+                        team.getPoints()
+                );
             }
         }
 
         public void showUpcomingMatches() {
+
             System.out.println("\n--- Upcoming Matches ---");
-            for (Match m : matches) {
-                if (!m.isPlayed()) {
-                    System.out.println(m.getSummary());
+
+            boolean found = false;
+
+            for (Match match : matches) {
+
+                if (!match.isPlayed()) {
+
+                    System.out.println(match.getSummary());
+
+                    found = true;
                 }
+            }
+
+            if (!found) {
+                System.out.println("No upcoming matches.");
             }
         }
 
         public void showAllResults() {
+
             System.out.println("\n--- Match Results ---");
-            for (Match m : matches) {
-                if (m.isPlayed()) {
-                    System.out.println(m.getSummary());
+
+            boolean found = false;
+
+            for (Match match : matches) {
+
+                if (match.isPlayed()) {
+
+                    System.out.println(match.getSummary());
+
+                    found = true;
+                }
+            }
+
+            if (!found) {
+                System.out.println("No completed matches.");
+            }
+       }
+        
+        public void showAwards() {
+
+            List<Player> allPlayers = new ArrayList<>();
+
+            for (Team team : teams) {
+
+                allPlayers.addAll(team.getPlayers());
+            }
+
+            if (allPlayers.isEmpty()) {
+
+                System.out.println( "\nNo players available for awards.");
+
+                return;
+            }
+
+            allPlayers.sort(
+                    Comparator.comparingInt(Player::getStats)
+                            .reversed()
+                            .thenComparing(
+                                    Comparator.comparingDouble(
+                                            Player::getRating
+                                    ).reversed()
+                            )
+            );
+
+            Player mvp = allPlayers.get(0);
+
+            System.out.println("\n--- Awards ---");
+
+            System.out.println("MVP: " + mvp.getName());
+
+            System.out.println("Player ID: " + mvp.getPlayerId());
+
+            System.out.println("Role: " + mvp.getRole());
+
+            System.out.println("Statistics: " + mvp.getStats());
+
+            System.out.printf(
+                    "Rating: %.2f%n",
+                    mvp.getRating()
+            );
+        }
+
+        public void showPlayers() {
+
+            System.out.println("\n--- Player Details ---");
+
+            for (Team team : teams) {
+
+                System.out.println("\nTeam: " + team.getName());
+
+                for (Player player : team.getPlayers()) {
+
+                    System.out.println(
+                            player.getPlayerId() + " | "
+                                    + player.getName() + " | "
+                                    + player.getRole() + " | "
+                                    + "Stats: " + player.getStats()
+                                    + " | Rating: "
+                                    + String.format("%.2f", player.getRating())
+                    );
                 }
             }
         }
-
-        public void showAwards() {
-            List<Player> allPlayers = new ArrayList<>();
-            for (Team t : teams) {
-                allPlayers.addAll(t.getPlayers());
-            }
-
-            allPlayers.sort((a, b) -> b.getStats() - a.getStats());
-            Player mvp = allPlayers.get(0);
-            System.out.println("\n--- Awards ---");
-            System.out.println("MVP: " + mvp.getName() + " | Stats: " + mvp.getStats() + " | Rating: " + mvp.getRating());
-        }
     }
 
-
     public static void main(String[] args) {
+
         LeagueService league = new LeagueService();
 
+        int falcons = league.registerTeam(
+                "Falcons", "Coach A", "New York"
+        );
 
-        league.registerTeam("Falcons", "Coach A", "New York");
-        league.registerTeam("Tigers", "Coach B", "Chicago");
-        league.registerTeam("Wolves", "Coach C", "LA");
+        int tigers = league.registerTeam(
+                "Tigers", "Coach B", "Chicago"
+        );
 
+        int wolves = league.registerTeam(
+                "Wolves", "Coach C", "Los Angeles"
+        );
 
-        league.addPlayerToTeam(0, new Striker(1, "John", 4.5, 5));
-        league.addPlayerToTeam(0, new Goalkeeper(2, "Sam", 3.8, 10));
+        Player john = new Striker(1, "John", 4.5, 5);
+        Player sam = new Goalkeeper(2, "Sam", 3.8, 10);
 
-        league.addPlayerToTeam(1, new Striker(3, "Alex", 5.0, 7));
-        league.addPlayerToTeam(1, new Goalkeeper(4, "Tom", 4.2, 8));
+        Player alex = new Striker(3, "Alex", 5.0, 7);
+        Player tom = new Goalkeeper(4, "Tom", 4.2, 8);
 
-        league.addPlayerToTeam(2, new Striker(5, "Max", 4.9, 6));
-        league.addPlayerToTeam(2, new Goalkeeper(6, "Leo", 4.0, 12));
+        Player max = new Striker(5, "Max", 4.9, 6);
+        Player leo = new Goalkeeper(6, "Leo", 4.0, 12);
 
+        league.addPlayerToTeam(falcons, john);
+        league.addPlayerToTeam(falcons, sam);
+
+        league.addPlayerToTeam(tigers, alex);
+        league.addPlayerToTeam(tigers, tom);
+
+        league.addPlayerToTeam(wolves, max);
+        league.addPlayerToTeam(wolves, leo);
 
         league.scheduleMatches();
-
-
-        league.recordResult(1, 2, 1); // Falcons beat Tigers
-        league.recordResult(2, 0, 0); // Draw between Falcons and Wolves
-        league.recordResult(3, 3, 2); // Tigers beat Wolves
-
-
+        league.recordResult(1, 2, 1);
+        league.recordResult(2, 0, 0);
+        league.recordResult(3, 3, 2);
+        Map<Player, Integer> match1Stats = new LinkedHashMap<>();
+        match1Stats.put(john, 2);
+        match1Stats.put(sam, 4);
+        match1Stats.put(alex, 1);
+        match1Stats.put(tom, 2);
+        league.recordPlayerStats(1, match1Stats);
+        Map<Player, Integer> match2Stats = new LinkedHashMap<>();
+        match2Stats.put(john, 1);
+        match2Stats.put(leo, 3);
+        league.recordPlayerStats(2, match2Stats);
+        Map<Player, Integer> match3Stats = new LinkedHashMap<>();
+        match3Stats.put(alex, 2);
+        match3Stats.put(tom, 3);
+        match3Stats.put(max, 1);
+        match3Stats.put(leo, 2);
+        league.recordPlayerStats(3, match3Stats);
         league.showAllResults();
         league.showStandings();
+        league.showPlayers();
         league.showAwards();
         league.showUpcomingMatches();
     }
